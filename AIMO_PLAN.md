@@ -1,0 +1,243 @@
+# AIMO_PLAN.md  
+**Legitimacy-First Squiggle Research → AIMO Competition Path**
+
+> Goal:  
+> Establish *credible, reproducible evidence* that **squiggle-based geometric events** correlate with learning and generalization in math-reasoning LLMs, using architectures and datasets that scale naturally to AIMO-grade models.
+
+This plan prioritizes **research legitimacy over leaderboard position**. Competitive performance is treated as a downstream validation, not the primary objective.
+
+---
+
+## 0. Guiding Principles (Non-Negotiable)
+
+- **Not a toy model**: architectures, datasets, and training regimes must resemble real LLM practice.
+- **Seed-invariant evidence > single-run anecdotes**
+- **Separation of concerns**:
+  - Training ≠ Analysis
+  - Probes ≠ Interpretation
+  - Events ≠ Consensus
+- **Every artifact traceable** to:
+  - run_id
+  - dataset slice
+  - seed
+  - curriculum
+  - config hash
+
+**Definition of Done (Global):**
+- Another researcher can reproduce *at least one* squiggle-learning claim using only the repo + data instructions.
+
+---
+
+## 1. Baseline Infrastructure Readiness ✅
+
+### 1.1 Repo & pipeline sanity
+- [x] Scout training pipeline runs end-to-end
+- [x] Capture → geometry → events → report pipeline works
+- [x] Artifacts written using `squiggle_core.paths`
+- [x] `run + analyze` one-command wrapper exists
+
+**DoD:**  
+A Scout run produces a `reports/report.md` with geometry + events sections populated.
+
+---
+
+### 1.2 Artifact contract stabilization
+- [ ] Confirm canonical artifact locations in docs:
+  - `runs/<run_id>/reports/report.md`
+  - `geometry_state_long/<run_id>.parquet` (v0 canonical)
+  - `events/<run_id>.parquet` = *single-run candidate events (v0)*
+- [ ] Add **explicit “v0 semantics”** note to docs:
+  - events are *per-run change points*, not consensus
+
+**DoD:**  
+Docs and code agree on paths and semantics with no ambiguity.
+
+---
+
+## 2. Research-Grade Instrumentation Model (Core Legitimacy Work)
+
+### 2.1 Model selection (NOT Scout)
+**Target:** A *real* LLM-style decoder, small enough to instrument heavily.
+
+- [ ] Choose architecture:
+  - Decoder-only
+  - RMSNorm
+  - RoPE
+  - SwiGLU
+  - Tied embeddings
+- [ ] Choose size tier:
+  - ⬜ ~350M (fast iteration, many seeds)
+  - ⬜ ~1.3B (stronger legitimacy)
+- [ ] Fix context length (e.g., 1k–2k)
+
+**DoD:**  
+A model that “looks like” a modern LLM to an external reviewer.
+
+---
+
+### 2.2 Training regime definition
+- [ ] From-scratch training (no hidden pretraining)
+- [ ] Deterministic seeding
+- [ ] Curriculum explicitly defined (ordering, mixing)
+- [ ] Logging cadence defined (dense early, sparse later)
+
+**DoD:**  
+Two independent runs with identical configs produce comparable loss curves.
+
+---
+
+## 3. Dataset Strategy (Legitimacy-Aligned)
+
+### 3.1 Primary dataset
+- [ ] Integrate NVIDIA-released math reasoning dataset
+- [ ] Verify licensing + competition compatibility
+- [ ] Build **dataset manifest**:
+  - source
+  - size
+  - token count
+  - reasoning style (CoT / TIR / short)
+
+**DoD:**  
+Dataset slice can be reconstructed from a manifest file alone.
+
+---
+
+### 3.2 Holdout & contamination control
+- [ ] Define **strict holdout set**
+- [ ] Ensure no overlap with:
+  - training data
+  - probe A
+- [ ] Track dataset hashes per run
+
+**DoD:**  
+Holdout evaluation produces non-trivial error even when training loss → 0.
+
+---
+
+## 4. Squiggle Discovery Experiments (Core Research Claim)
+
+### 4.1 Multi-seed geometry capture
+- [ ] Run ≥3 seeds with identical configs
+- [ ] Capture identical layers/metrics
+- [ ] Normalize timelines (time-warp allowed)
+
+**DoD:**  
+Geometry state exists for all runs with matching schemas.
+
+---
+
+### 4.2 Event detection (v0)
+- [ ] Detect per-run change points
+- [ ] Label events with:
+  - metric
+  - layer
+  - step interval
+  - magnitude
+- [ ] Store as candidate events (single-run)
+
+**DoD:**  
+Each run produces a non-empty events table.
+
+---
+
+### 4.3 Seed-invariance analysis
+- [ ] Compare event distributions across seeds
+- [ ] Identify:
+  - repeated event *types*
+  - approximate alignment windows
+- [ ] Flag candidate “structural” events
+
+**DoD:**  
+At least one event family appears in ≥2 seeds within tolerance.
+
+---
+
+## 5. Probe & Capability Correlation
+
+### 5.1 Probe design
+- [ ] Probe A: in-distribution (training-like)
+- [ ] Probe B: holdout (generalization)
+- [ ] Probes fixed, immutable, logged once per run
+
+**DoD:**  
+Probe metrics appear in scalars parquet and report.
+
+---
+
+### 5.2 Correlation analysis
+- [ ] Align probe changes with event windows
+- [ ] Identify:
+  - probe jumps
+  - loss curvature changes
+  - geometry changes
+
+**DoD:**  
+At least one event correlates with a probe or loss regime shift.
+
+---
+
+## 6. Reporting & Evidence Packaging
+
+### 6.1 Report upgrades
+- [ ] Add:
+  - probe curves
+  - event summaries
+  - geometry metric trends
+- [ ] Explicitly label:
+  - hypotheses
+  - observations
+  - non-claims
+
+**DoD:**  
+`report.md` reads like a *research log*, not a training log.
+
+---
+
+### 6.2 Shareable evidence bundle
+- [ ] Minimal reproduction instructions
+- [ ] Fixed seeds + configs
+- [ ] Clear statement of limitations
+
+**DoD:**  
+Another LLM (or human) could summarize findings without asking clarifying questions.
+
+---
+
+## 7. Transition to AIMO-Targeted Runs
+
+### 7.1 Hypothesis transfer
+- [ ] Identify which squiggle events:
+  - scale-invariant
+  - architecture-invariant
+- [ ] Select 1–2 candidate signals to test on larger models
+
+**DoD:**  
+Clear hypothesis: *“If event X appears, capability Y improves.”*
+
+---
+
+### 7.2 H100 usage plan
+- [ ] Reserve H100 time for:
+  - LoRA fine-tunes
+  - short validation runs
+- [ ] Keep instrumentation lightweight but compatible
+
+**DoD:**  
+At least one AIMO-style model run includes squiggle-informed logging.
+
+---
+
+## 8. Explicit Non-Goals (v0)
+
+- ❌ Winning the leaderboard immediately
+- ❌ Full consensus events across dozens of seeds
+- ❌ Cross-model matching at scale
+- ❌ Interpretability claims beyond geometry + correlation
+
+---
+
+## Success Criteria (Legitimacy Bar)
+
+This project is **successful** if we can say:
+
+> “We observed repeatable, seed-robust geometric events in a non-toy model trained on real math reasoning data, and those events correlate with learning behavior in a way that is not reducible to loss alone.”
