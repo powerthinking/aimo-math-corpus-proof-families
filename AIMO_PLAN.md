@@ -8,6 +8,28 @@ This plan prioritizes **research legitimacy over leaderboard position**. Competi
 
 ---
 
+## Roadmap Summary (v0)
+
+1. **Lock the spec and build the harnesses**
+2. **Identify the candidate pool (breadth-first)**: ~2k–10k candidate training problems
+3. **Probe cycle (Impact Clusters)**: run probes on ~50–200 families; measure DIS distribution; identify top ~10 clusters
+4. **Expand winners and generate neighbors**: expand to ~200–500 problems via targeted generation (same mechanism, varied surface)
+5. **Confirmation on a larger open model** (e.g., DeepSeek-R1-0): curated corpus vs random; same budget; evaluate on holdout/validation subsets
+6. **Write the dataset + write-up for submission**
+
+### Step 1 deliverables: spec + harnesses (v0)
+
+- [ ] **Probe harness implementation** in `squiggle-instrumentation` (micro-finetune probe runner)
+- [ ] **Probe output contract** uses `squiggle_core.schemas.probe_summar.ProbeSummary` (schema `probe_summary@2.0`)
+- [ ] **DIS computation** follows the DIS separation in Squiggle docs (Magnitude × Coherence × Novelty; operational ranking)
+- [ ] **Aggregation output** (per experiment) can be written as:
+  - `probe_summaries.parquet`
+  - `probe_events_candidates.parquet`
+  using the existing writer in `squiggle-analysis` (`squiggle_analysis/io/write_probe_parquet_per_experiment.py`)
+
+**DoD:**
+Given a base checkpoint and a set of families, we can run probes and produce a Parquet table of DIS + signatures suitable for clustering.
+
 ## 0. Guiding Principles (Non-Negotiable)
 
 - **Not a toy model**: architectures, datasets, and training regimes must resemble real LLM practice.
@@ -28,6 +50,14 @@ This plan prioritizes **research legitimacy over leaderboard position**. Competi
 
 ---
 
+## 0.1 Confirmed Decisions (Current)
+
+- **Probe harness location:** Implement the probe harness in `squiggle-instrumentation` (per `squiggle-matching/README.md` repo responsibilities).
+- **Confirmation model strategy:** Start with LoRA fine-tuning for squiggle detection; escalate to full fine-tuning if needed.
+- **Aggregation location (Option A):** Keep experiment-level Parquet + `_manifest.json` export in `squiggle-analysis`.
+- **AIMO repo output policy:** Store only exported Parquet + manifests (polished, reviewable artifacts), not raw probe JSONs.
+- **Experiment naming:** Use human-readable `EXP_ID` plus a hashed `analysis_id` inside exported tables for strict traceability.
+
 ## 1. Baseline Infrastructure Readiness ✅
 
 ### 1.1 Repo & pipeline sanity
@@ -44,10 +74,10 @@ A Scout run produces a `reports/report.md` with geometry + events sections popul
 ### 1.2 Artifact contract stabilization
 - [ ] Confirm canonical artifact locations in docs:
   - `runs/<run_id>/reports/report.md`
-  - `geometry_state_long/<run_id>.parquet` (v0 canonical)
-  - `events/<run_id>.parquet` = *single-run candidate events (v0)*
+  - `geometry_state/<run_id>.parquet`
+  - `events_candidates/<run_id>.parquet` = *single-run candidate events*
 - [ ] Add **explicit “v0 semantics”** note to docs:
-  - events are *per-run change points*, not consensus
+  - `events_candidates` are *per-run change points*, not seed-consensus
 
 **DoD:**  
 Docs and code agree on paths and semantics with no ambiguity.
@@ -88,14 +118,36 @@ Two independent runs with identical configs produce comparable loss curves.
 
 ## 3. Dataset Strategy (Legitimacy-Aligned)
 
+### 3.0 Problem family definition (operational)
+
+A **problem family** is a parameterized generator of many problem instances that share the same internal solution program.
+
+- **Underlying solution strategy invariant**
+  - Same core algorithm / proof skeleton
+  - Same reasoning moves
+- **Surface form varies**
+  - Different constants, parameters, objects, or constraints
+  - Different wrappers / presentations
+- **Controlled difficulty**
+  - Easy → hard instances via explicit knobs
+- **Fully specified and verifiable**
+  - Deterministic answer
+  - Preferably deterministic proof trace / outline
+- **Programmatically sampleable**
+  - A generative object, not a static list
+
 ### 3.1 Primary dataset
-- [ ] Integrate NVIDIA-released math reasoning dataset
+- [ ] Integrate NVIDIA-released math reasoning dataset (https://huggingface.co/datasets/nvidia/OpenMathReasoning/viewer)
 - [ ] Verify licensing + competition compatibility
 - [ ] Build **dataset manifest**:
   - source
   - size
   - token count
   - reasoning style (CoT / TIR / short)
+
+Notes:
+- Initial candidate pool target: **~2k–10k problems**, preferably drawn from OpenMathReasoning.
+- If target problem types are underrepresented (modular arithmetic/invariants, discrete log/order/cyclic groups, bijections/counting, graph/path recurrence counting, functional equations, invariant/monovariant puzzles), generate supplemental families.
 
 **DoD:**  
 Dataset slice can be reconstructed from a manifest file alone.
