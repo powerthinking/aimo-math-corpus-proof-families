@@ -19,16 +19,36 @@ This plan prioritizes **research legitimacy over leaderboard position**. Competi
 
 ### Step 1 deliverables: spec + harnesses (v0)
 
-- [ ] **Probe harness implementation** in `squiggle-instrumentation` (micro-finetune probe runner)
-- [ ] **Probe output contract** uses `squiggle_core.schemas.probe_summar.ProbeSummary` (schema `probe_summary@2.0`)
-- [ ] **DIS computation** follows the DIS separation in Squiggle docs (Magnitude × Coherence × Novelty; operational ranking)
-- [ ] **Aggregation output** (per experiment) can be written as:
+- [x] **Probe harness implementation** in `squiggle-instrumentation` (micro-finetune probe runner + `squiggle-probe` CLI)
+- [x] **Probe output contract** uses `squiggle_core.schemas.probe_summar.ProbeSummary` (schema `probe_summary@2.0`)
+- [x] **DIS computation** follows the DIS separation in Squiggle docs (Magnitude × Coherence × Novelty; operational ranking)
+- [x] **Aggregation output** (per experiment) can be written as:
   - `probe_summaries.parquet`
   - `probe_events_candidates.parquet`
   using the existing writer in `squiggle-analysis` (`squiggle_analysis/io/write_probe_parquet_per_experiment.py`)
 
 **DoD:**
 Given a base checkpoint and a set of families, we can run probes and produce a Parquet table of DIS + signatures suitable for clustering.
+
+**Current status (validated via dummy end-to-end run):**
+- `squiggle-probe` can run a dummy micro-finetune probe experiment and write:
+  - `ProbeSummary` JSONs under `data/experiments/<EXP_ID>/summaries/`
+  - run-scoped probe artifacts under `data/runs/runs/<run_id>/...` via `squiggle_core.paths`
+- The aggregator can consume those JSONs and write:
+  - `data/experiments/<EXP_ID>/aggregated/probe_summaries.parquet`
+  - `data/experiments/<EXP_ID>/aggregated/probe_events_candidates.parquet`
+  - `data/experiments/<EXP_ID>/aggregated/_manifest.json`
+
+### Immediate next-best step (v0.1): first real probe on real data
+
+- [ ] Produce a small **candidate pool slice** (e.g. 50–200 problems) + manifest from OpenMathReasoning, with licensing notes.
+- [ ] Define a minimal **family mapping strategy** for that slice:
+  - initial `family_id` assignment rules (even if heuristic)
+  - deterministic sampling per `family_id`
+- [ ] Implement a non-dummy `ProbeAdapter` for a real decoder model (likely HF + LoRA) and run:
+  - ≥1 family
+  - ≥2 seeds
+  - verify outputs aggregate cleanly and are stable enough to start DIS clustering.
 
 ## 0. Guiding Principles (Non-Negotiable)
 
@@ -72,12 +92,15 @@ A Scout run produces a `reports/report.md` with geometry + events sections popul
 ---
 
 ### 1.2 Artifact contract stabilization
-- [ ] Confirm canonical artifact locations in docs:
+- [x] Confirm canonical artifact locations in docs:
   - `runs/<run_id>/reports/report.md`
   - `geometry_state/<run_id>.parquet`
   - `events_candidates/<run_id>.parquet` = *single-run candidate events*
-- [ ] Add **explicit “v0 semantics”** note to docs:
-  - `events_candidates` are *per-run change points*, not seed-consensus
+- [x] Add **explicit “v0 semantics”** note to docs:
+  - `events_candidates` are *per-run windowed candidates*, not seed-consensus
+  - Supports both single-metric and composite candidates (`metric = __composite__`)
+  - Candidate rows include a full scoring breakdown and (for composite events) per-metric diagnostics encoded as JSON maps
+  - Optional scoring baselines may be persisted under `scoring_baselines/<baseline_id>.json`
 
 **DoD:**  
 Docs and code agree on paths and semantics with no ambiguity.
@@ -144,6 +167,37 @@ A **problem family** is a parameterized generator of many problem instances that
   - size
   - token count
   - reasoning style (CoT / TIR / short)
+
+Candidate pool slice item schema (v0.1):
+- `item_id`: stable id (e.g. `omr:<split>:<source_id>`)
+- `source`: provenance (dataset name + split + `source_id` + any source-side tags like `problem_source`)
+- `content`: training payload
+  - `problem`: string
+  - `final_answer`: string | null
+- `trace`: solution-trace scaffold (initially empty)
+  - `steps`: array (blank initially)
+  - `max_steps`: integer guidance (8–30)
+  - `step_type` vocabulary:
+    - `parse`
+    - `rewrite`
+    - `simplify`
+    - `substitute`
+    - `expand`
+    - `factor`
+    - `differentiate`
+    - `integrate`
+    - `apply_identity`
+    - `apply_theorem`
+    - `case_split`
+    - `introduce_variable`
+    - `bound_estimate`
+    - `compute`
+    - `verify`
+    - `conclude`
+- `provenance`: reference solution text (not treated as the trace)
+  - store OpenMathReasoning `generated_solution` here for provenance, without converting it into `trace.steps`.
+
+Note: `trace.steps` is expected to remain blank in the initial slice and may later be promoted into a dedicated Parquet artifact once the trace format stabilizes.
 
 Notes:
 - Initial candidate pool target: **~2k–10k problems**, preferably drawn from OpenMathReasoning.
