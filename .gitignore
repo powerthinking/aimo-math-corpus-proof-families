@@ -1,3 +1,17 @@
+# Work product - all intermediate/working files go to $SQUIGGLE_DATA_ROOT/candidate_pool/
+# Only final submission files should be manually added to this repo
+candidate_pool/
+
+# Large data files (prevent accidental commits)
+*.jsonl
+*.parquet
+*.pt
+*.pth
+*.safetensors
+
+# Cache directories
+.cache/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

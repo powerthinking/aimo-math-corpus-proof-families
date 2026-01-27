@@ -41,14 +41,76 @@ Given a base checkpoint and a set of families, we can run probes and produce a P
 
 ### Immediate next-best step (v0.1): first real probe on real data
 
-- [ ] Produce a small **candidate pool slice** (e.g. 50–200 problems) + manifest from OpenMathReasoning, with licensing notes.
-- [ ] Define a minimal **family mapping strategy** for that slice:
-  - initial `family_id` assignment rules (even if heuristic)
-  - deterministic sampling per `family_id`
-- [ ] Implement a non-dummy `ProbeAdapter` for a real decoder model (likely HF + LoRA) and run:
-  - ≥1 family
-  - ≥2 seeds
-  - verify outputs aggregate cleanly and are stable enough to start DIS clustering.
+**Candidate Pool (complete):**
+- [x] Implement `tools/build_omr_slice.py` (load OMR from HuggingFace, hash, write manifest)
+- [x] Define item schema with provenance tracking (`candidate_pool_slice@0.1`)
+- [x] Create sample slices for testing (5-item slices in `candidate_pool/slices/`)
+- [x] Build 5000-item slice for family classification (`slice_omr_cot_shuffle_n5000_s42_990f251068d3`)
+- [ ] Add licensing notes to manifest
+
+**Family Mapping (in progress):**
+- [x] Define target families in `src/aimo_math_corpus_proof_families/families.py`:
+  - `modular_arithmetic` - Modular Arithmetic & Invariants
+  - `cyclic_groups` - Discrete Log / Order / Cyclic Groups
+  - `bijection_counting` - Counting via Bijections
+  - `graph_recurrence` - Graph / Path Counting via Recurrence
+  - `functional_equations` - Functional Equations
+  - `invariant_monovariant` - Invariant / Monovariant Puzzles
+- [x] Define control families in `src/aimo_math_corpus_proof_families/control_families.py`:
+  - 10 families: geometry, polynomials, inequalities, calculus, probability, combinatorics, number theory, sequences, logic, optimization
+- [x] Implement LLM-based classifier (`src/aimo_math_corpus_proof_families/classifier.py`)
+  - Supports OpenAI and Anthropic backends
+  - Caches results for resumability
+- [x] Implement classification CLI (`tools/classify_slice.py`) - Phase 1: target vs other
+- [x] Implement sub-classification CLI (`tools/subclassify_other.py`) - Phase 2: control families
+- [x] Implement family extraction CLI (`tools/extract_families.py`) - supports `--include-controls`
+- [x] Complete Phase 1 classification (5000 items → 3046 target, 1954 other)
+  - functional_equations: 1476, bijection_counting: 660, modular_arithmetic: 357
+  - graph_recurrence: 253, invariant_monovariant: 243, cyclic_groups: 57
+- [x] Complete Phase 2 sub-classification of "other" items (1954 items)
+  - geometry_euclidean: 658, calculus_analysis: 399, optimization: 263
+  - algebra_polynomials: 150, misc_other: 135, sequences_series: 81
+  - probability_expectation: 76, combinatorics_basic: 67, inequalities: 65
+  - number_theory_basic: 33, logic_proof: 27
+- [x] Extract 50-200 items per target and control family
+  - Target: 6 families, 1057 items (200 per family, except cyclic_groups: 57)
+  - Control: 10 families, 1099 items
+  - Output: `candidate_pool/slices/.../families/{target,control}/*.jsonl`
+
+**Unified Classification (complete - recommended for new work):**
+- [x] Implement unified single-step classifier (`src/aimo_math_corpus_proof_families/unified_classifier.py`):
+  - Classifies into all 17 categories (6 target + 10 control + other) in single LLM call
+  - Captures full provenance: model_id, temperature, prompt_hash, timestamp
+  - Deterministic (temperature=0.0 by default)
+  - Tracks confidence and raw response for audit
+- [x] Implement unified classification CLI (`tools/classify_unified.py`)
+  - Supports resume from partial classification
+  - Writes classification metadata for reproducibility
+
+**Problem Usage Tracking (complete):**
+- [x] Implement `ProblemRegistry` class (`src/aimo_math_corpus_proof_families/usage_tracking.py`):
+  - Central registry of all problems with immutable IDs
+  - Usage ledger tracking problem→run assignments
+  - Holdout set declaration and enforcement
+  - `ContaminationError` raised if training would use holdout items
+- [x] Support export to Parquet for analysis
+- [x] Document research integrity considerations (`RESEARCH_INTEGRITY.md`)
+
+**Experimental Design:**
+- Target families (6): Hypothesized to cause significant geometric change
+- Control families (~10): Baseline comparison to establish *relative* impact
+- Goal: Show target families cause MORE geometric change than controls
+
+**Real ProbeAdapter (complete):**
+- [x] Add `transformers` and `peft` dependencies to squiggle-instrumentation (`[hf]` optional deps)
+- [x] Implement `HFProbeAdapter` class (`squiggle-instrumentation/src/squiggle_instrumentation/hf_adapter.py`):
+  - Loads HuggingFace model from checkpoint via AutoModelForCausalLM
+  - Registers forward hooks for layer tensor capture
+  - Implements LoRA micro-finetune with configurable rank/alpha
+  - Supports loading training data from family JSONL files
+- [x] Update CLI (`squiggle-probe`) with `--adapter hf` option
+- [ ] Test on ≥1 family, ≥2 seeds
+- [ ] Verify outputs aggregate cleanly and are stable enough to start DIS clustering
 
 ## 0. Guiding Principles (Non-Negotiable)
 
@@ -109,33 +171,82 @@ Docs and code agree on paths and semantics with no ambiguity.
 
 ## 2. Research-Grade Instrumentation Model (Core Legitimacy Work)
 
-### 2.1 Model selection (NOT Scout)
+### 2.1 Model selection (NOT Scout) ✅
 **Target:** A *real* LLM-style decoder, small enough to instrument heavily.
 
-- [ ] Choose architecture:
-  - Decoder-only
-  - RMSNorm
-  - RoPE
-  - SwiGLU
-  - Tied embeddings
-- [ ] Choose size tier:
-  - ⬜ ~350M (fast iteration, many seeds)
-  - ⬜ ~1.3B (stronger legitimacy)
-- [ ] Fix context length (e.g., 1k–2k)
+- [x] Choose architecture:
+  - Decoder-only ✓
+  - RMSNorm ✓
+  - RoPE (Rotary Position Embeddings) ✓
+  - SwiGLU ✓
+  - Tied embeddings ✓
+- [x] Choose size tier:
+  - ✅ ~350M (fast iteration, many seeds) - `get_research_config_350m()` = 341M params
+  - ✅ ~1.3B (stronger legitimacy) - `get_research_config_1b()` = 1.30B params
+- [x] Fix context length: 2048 tokens
 
-**DoD:**  
-A model that “looks like” a modern LLM to an external reviewer.
+**Implementation:**
+- Model: `squiggle-experiments/src/squiggle_experiments/models/research_transformer.py`
+- Config: `squiggle-experiments/src/squiggle_experiments/research/config.py`
+
+**DoD:**
+A model that "looks like" a modern LLM to an external reviewer. ✓
 
 ---
 
 ### 2.2 Training regime definition
 - [ ] From-scratch training (no hidden pretraining)
-- [ ] Deterministic seeding
+- [x] Deterministic seeding (via `seed` config)
 - [ ] Curriculum explicitly defined (ordering, mixing)
-- [ ] Logging cadence defined (dense early, sparse later)
+- [x] Logging cadence defined (dense early, sparse later) - Full spec in `research/config.py`
 
-**DoD:**  
+**Logging Hierarchy (implemented in `squiggle-experiments/src/squiggle_experiments/research/config.py`):**
+
+| Section | What | Cadence |
+|---------|------|---------|
+| **A. Scalars** | Global loss, per-task loss/accuracy, grad norms, LR, curriculum mix | Every step |
+| **B. Checkpoints** | Model weights + optimizer state | Early: 250-500 steps; Late: 1k-2k steps |
+| **C. Probes** | Fixed (250-1k examples), Extended (5k-10k at milestones) | Fixed: every 100 steps; Extended: at 0%, 10%, 25%, 50%, 75%, 100% |
+| **D. Activations** | x_in, attn_out, x_mid, mlp_out, x_out for all layers | Early: 500-1k; Mid: 2k-5k; Late: 5k-10k |
+| **E. Attention Matrices** | Full attention patterns | DEFERRED until signatures exist |
+
+Probe metrics captured:
+- Embeddings output
+- Residual stream (at specified layers: 0, 6, 12, 18, 23)
+- Attention statistics
+- Output entropy
+- Top-k mass (k=1, 5, 10)
+
+**DoD:**
 Two independent runs with identical configs produce comparable loss curves.
+
+### 2.3 Training runner implementation ✅
+- [x] Implement `ResearchTrainer` class in `squiggle-experiments/src/squiggle_experiments/research/trainer.py`
+  - Dataloader with curriculum mixing (placeholder dataset for now)
+  - Optimizer (AdamW) with cosine LR schedule + warmup
+  - Gradient accumulation and clipping
+  - Integration with logging hierarchy (A-E)
+- [x] Implement checkpoint save/load with optimizer state
+- [x] Implement probe integration hooks (fixed + extended probes)
+- [x] Add CLI entry point (`squiggle-research` CLI or `python -m squiggle_experiments.research`)
+
+**Usage:**
+```bash
+# Run with YAML config
+python -m squiggle_experiments.research --config path/to/config.yaml
+
+# Run with preset (debug or default)
+python -m squiggle_experiments.research --preset debug
+```
+
+**DoD:**
+`python -m squiggle_experiments.research --config config.yaml` runs training with all logging active. ✓
+
+**First Successful Run (validated):**
+- Run ID: `20260123_145805_research_families_debug_s42`
+- Debug model (~16M params) trained on all 16 families (2156 items)
+- Loss: 10.87 → 4.52 over 200 steps
+- Checkpoints, scalars, and activation captures saved successfully
 
 ---
 
